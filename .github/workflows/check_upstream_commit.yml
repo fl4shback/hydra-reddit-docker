@@ -20,19 +20,11 @@ jobs:
           LATEST_SHA=$(curl -s https://api.github.com/repos/dmilin1/hydra-server/commits/main \
             | jq -r '.sha')
           echo "latest_sha=${LATEST_SHA}" >> $GITHUB_OUTPUT
-          echo "Fetched SHA: ${LATEST_SHA}"
 
       - name: Get last built SHA
         id: last_built
         run: |
           echo "sha=${{ vars.LAST_BUILT_SHA }}" >> $GITHUB_OUTPUT
-          echo "Last built SHA: ${{ vars.LAST_BUILT_SHA }}"
-
-      - name: Debug comparison
-        run: |
-          echo "upstream: ${{ steps.upstream.outputs.latest_sha }}"
-          echo "last_built: ${{ steps.last_built.outputs.sha }}"
-          echo "equal: ${{ steps.upstream.outputs.latest_sha == steps.last_built.outputs.sha }}"
 
       - name: Trigger build if commit changed
         if: steps.upstream.outputs.latest_sha != steps.last_built.outputs.sha
@@ -51,23 +43,17 @@ jobs:
       - name: Update last built SHA variable
         if: steps.upstream.outputs.latest_sha != steps.last_built.outputs.sha
         run: |
-          RESPONSE=$(curl -s -w "\n%{http_code}" -L -X PATCH \
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L -X PATCH \
             -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             https://api.github.com/repos/${{ github.repository }}/actions/variables/LAST_BUILT_SHA \
             -d '{"name":"LAST_BUILT_SHA","value":"${{ steps.upstream.outputs.latest_sha }}"}')
-          STATUS=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | head -1)
-          echo "PATCH status: $STATUS"
-          echo "PATCH body: $BODY"
           if [ "$STATUS" = "404" ]; then
-            RESPONSE2=$(curl -s -w "\n%{http_code}" -L -X POST \
+            curl -s -L -X POST \
               -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
               https://api.github.com/repos/${{ github.repository }}/actions/variables \
-              -d '{"name":"LAST_BUILT_SHA","value":"${{ steps.upstream.outputs.latest_sha }}"}')
-            echo "POST status: $(echo "$RESPONSE2" | tail -1)"
-            echo "POST body: $(echo "$RESPONSE2" | head -1)"
+              -d '{"name":"LAST_BUILT_SHA","value":"${{ steps.upstream.outputs.latest_sha }}"}'
           fi
