@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write
+      contents: write  # needed for repository_dispatch and updating variables
 
     steps:
       - name: Get latest upstream commit SHA
@@ -41,13 +41,16 @@ jobs:
 
       - name: Update last built SHA variable
         if: steps.upstream.outputs.latest_sha != steps.last_built.outputs.sha
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            await github.rest.actions.createOrUpdateRepoVariable({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              name: 'LAST_BUILT_SHA',
-              value: '${{ steps.upstream.outputs.latest_sha }}'
-            });
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X PATCH \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/actions/variables/LAST_BUILT_SHA \
+            -d '{"name":"LAST_BUILT_SHA","value":"${{ steps.upstream.outputs.latest_sha }}"}')
+          if [ "$STATUS" = "404" ]; then
+            curl -s -X POST \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github+json" \
+              https://api.github.com/repos/${{ github.repository }}/actions/variables \
+              -d '{"name":"LAST_BUILT_SHA","value":"${{ steps.upstream.outputs.latest_sha }}"}'
+          fi
