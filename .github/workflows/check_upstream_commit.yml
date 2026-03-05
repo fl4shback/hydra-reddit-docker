@@ -1,0 +1,54 @@
+name: Check Upstream Commit
+
+on:
+  schedule:
+    - cron: '0 4 * * *'  # daily at 04:00 UTC
+  workflow_dispatch:
+
+jobs:
+  check_commit:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      actions: write  # needed to update variables
+
+    steps:
+      - name: Get latest upstream commit SHA
+        id: upstream
+        run: |
+          LATEST_SHA=$(curl -s https://api.github.com/repos/dmilin1/hydra-server/commits/main \
+            | jq -r '.sha')
+          echo "latest_sha=${LATEST_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Get last built SHA
+        id: last_built
+        run: |
+          echo "sha=${{ vars.LAST_BUILT_SHA }}" >> $GITHUB_OUTPUT
+
+      - name: Trigger build if commit changed
+        if: steps.upstream.outputs.latest_sha != steps.last_built.outputs.sha
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createDispatchEvent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              event_type: 'trigger_docker_build',
+              client_payload: {
+                latest_tag: '${{ steps.upstream.outputs.latest_sha }}'
+              }
+            });
+
+      - name: Update last built SHA variable
+        if: steps.upstream.outputs.latest_sha != steps.last_built.outputs.sha
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createOrUpdateRepoVariable({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'LAST_BUILT_SHA',
+              value: '${{ steps.upstream.outputs.latest_sha }}'
+            });
