@@ -10,8 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read
-      actions: write  # needed to update variables
+      contents: write
 
     steps:
       - name: Get latest upstream commit SHA
