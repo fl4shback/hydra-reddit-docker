@@ -28,7 +28,7 @@ jobs:
 
       - name: Trigger build if commit changed
         if: steps.upstream.outputs.latest_sha != steps.last_built.outputs.sha
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             await github.rest.repos.createDispatchEvent({
